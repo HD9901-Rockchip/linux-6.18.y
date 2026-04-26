@@ -22,4 +22,23 @@ static inline void rockchip_pmu_unblock(void) { }
 
 #endif /* CONFIG_ROCKCHIP_PM_DOMAINS */
 
+#include <linux/pm_runtime.h>
+
+static inline int rockchip_pmu_pd_on(struct device *dev)
+{
+	pm_runtime_resume_and_get(dev);
+	return 0;
+}
+
+static inline int rockchip_pmu_pd_off(struct device *dev)
+{
+	pm_runtime_put(dev);
+	return 0;
+}
+
+static inline bool rockchip_pmu_pd_is_on(struct device *dev)
+{
+	return pm_runtime_active(dev);
+}
+
 #endif /* __SOC_ROCKCHIP_PM_DOMAINS_H__ */

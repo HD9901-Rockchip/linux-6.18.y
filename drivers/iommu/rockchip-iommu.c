@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/string_choices.h>
+#include <soc/rockchip/rockchip_iommu.h>
 
 #include "iommu-pages.h"
 
@@ -906,6 +907,129 @@ static struct rk_iommu *rk_iommu_from_dev(struct device *dev)
 
 	return data ? data->iommu : NULL;
 }
+
+static void rk_iommu_disable(struct rk_iommu *iommu);
+static int rk_iommu_enable(struct rk_iommu *iommu);
+
+int rockchip_iommu_enable(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+
+	if (!iommu)
+		return -ENODEV;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return ret;
+
+	ret = rk_iommu_enable(iommu);
+	pm_runtime_put(iommu->dev);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_enable);
+
+int rockchip_iommu_disable(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+
+	if (!iommu)
+		return -ENODEV;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return ret;
+
+	rk_iommu_disable(iommu);
+	pm_runtime_put(iommu->dev);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_disable);
+
+bool rockchip_iommu_is_enabled(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	bool enabled = false;
+	int ret;
+
+	if (!iommu)
+		return false;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return false;
+
+	if (iommu->num_mmu > 0)
+		enabled = !!(rk_iommu_read(iommu->bases[0], RK_MMU_STATUS) &
+			     RK_MMU_STATUS_PAGING_ENABLED);
+
+	pm_runtime_put(iommu->dev);
+
+	return enabled;
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_is_enabled);
+
+void rockchip_iommu_mask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+	int i;
+
+	if (!iommu)
+		return;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++)
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, 0);
+
+	pm_runtime_put(iommu->dev);
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_mask_irq);
+
+void rockchip_iommu_unmask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+	int i;
+
+	if (!iommu)
+		return;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++)
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, RK_MMU_IRQ_MASK);
+
+	pm_runtime_put(iommu->dev);
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_unmask_irq);
+
+int rockchip_iommu_force_reset(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+
+	if (!iommu)
+		return -ENODEV;
+
+	ret = pm_runtime_resume_and_get(iommu->dev);
+	if (ret < 0)
+		return ret;
+
+	ret = rk_iommu_force_reset(iommu);
+	pm_runtime_put(iommu->dev);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_iommu_force_reset);
 
 /* Must be called with iommu powered on and attached */
 static void rk_iommu_disable(struct rk_iommu *iommu)

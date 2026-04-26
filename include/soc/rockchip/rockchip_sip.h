@@ -6,6 +6,9 @@
 #ifndef __SOC_ROCKCHIP_SIP_H
 #define __SOC_ROCKCHIP_SIP_H
 
+#include <linux/arm-smccc.h>
+#include <linux/kernel.h>
+
 #define ROCKCHIP_SIP_SUSPEND_MODE		0x82000003
 #define ROCKCHIP_SLEEP_PD_CONFIG		0xff
 
@@ -19,5 +22,14 @@
 #define ROCKCHIP_SIP_CONFIG_DRAM_CLR_IRQ	0x06
 #define ROCKCHIP_SIP_CONFIG_DRAM_SET_PARAM	0x07
 #define ROCKCHIP_SIP_CONFIG_DRAM_SET_ODT_PD	0x08
+
+#if !IS_ENABLED(CONFIG_ROCKCHIP_SIP)
+static inline struct arm_smccc_res sip_smc_vpu_reset(u32 arg0, u32 arg1, u32 arg2)
+{
+	struct arm_smccc_res res = { };
+
+	return res;
+}
+#endif
 
 #endif

@@ -15,6 +15,8 @@ obj-$(CONFIG_FB_STI)		  += console/
 obj-$(CONFIG_LOGO)		  += logo/
 obj-y				  += backlight/
 
+obj-$(CONFIG_ROCKCHIP_MPP_SERVICE) += rockchip/
+
 obj-y				  += fbdev/
 
 obj-$(CONFIG_VIDEOMODE_HELPERS) += display_timing.o videomode.o
