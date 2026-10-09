@@ -1392,8 +1392,28 @@ static long rga_ioctl(struct file *file, uint32_t cmd, unsigned long arg)
 			if (ret != 0)
 				ret = -EFAULT;
 			break;
+		/*
+		 * airockchip librga 1.x 'r'-family ioctls (0x801c7201 and friends).
+		 * Our BSP rga2 only speaks the legacy 0x50xx/0x60xx protocol.  The
+		 * modern librga probes GET_DRIVER_VERSION (0x801c7201) and, on ANY
+		 * failure, falls back to the legacy RGA2_GET_VERSION (0x601b) plus
+		 * the legacy blit protocol -- which this driver fully supports.
+		 * Reject every new 'r' ioctl with -ENOTTY so librga takes that
+		 * compatibility fallback instead of believing the (unimplemented)
+		 * buffer-import / 152-byte blit protocol is available.
+		 */
+		case RGA2_IOC_GET_DRV_VERSION:
+		case RGA2_IOC_GET_HW_VERSION:
+		case RGA2_IOC_IMPORT_BUF3:
+		case RGA2_IOC_IMPORT_BUFFER:
+		case RGA2_IOC_IMPORT_BUF6:
+		case RGA2_IOC_IMPORT_BUF7:
+		case RGA2_IOC_RELEASE_BUFFER:
+		case RGA2_IOC_OP8:
+			ret = -ENOTTY;
+			break;
 		default:
-			ERR("unknown ioctl cmd!\n");
+			ERR("unknown ioctl cmd! cmd=0x%x\n", cmd);
 			ret = -EINVAL;
 			break;
 	}
@@ -1536,8 +1556,28 @@ static long compat_rga_ioctl(struct file *file, uint32_t cmd, unsigned long arg)
 			if (ret != 0)
 				ret = -EFAULT;
 			break;
+		/*
+		 * airockchip librga 1.x 'r'-family ioctls (0x801c7201 and friends).
+		 * Our BSP rga2 only speaks the legacy 0x50xx/0x60xx protocol.  The
+		 * modern librga probes GET_DRIVER_VERSION (0x801c7201) and, on ANY
+		 * failure, falls back to the legacy RGA2_GET_VERSION (0x601b) plus
+		 * the legacy blit protocol -- which this driver fully supports.
+		 * Reject every new 'r' ioctl with -ENOTTY so librga takes that
+		 * compatibility fallback instead of believing the (unimplemented)
+		 * buffer-import / 152-byte blit protocol is available.
+		 */
+		case RGA2_IOC_GET_DRV_VERSION:
+		case RGA2_IOC_GET_HW_VERSION:
+		case RGA2_IOC_IMPORT_BUF3:
+		case RGA2_IOC_IMPORT_BUFFER:
+		case RGA2_IOC_IMPORT_BUF6:
+		case RGA2_IOC_IMPORT_BUF7:
+		case RGA2_IOC_RELEASE_BUFFER:
+		case RGA2_IOC_OP8:
+			ret = -ENOTTY;
+			break;
 		default:
-			ERR("unknown ioctl cmd!\n");
+			ERR("unknown ioctl cmd! cmd=0x%x\n", cmd);
 			ret = -EINVAL;
 			break;
 	}
@@ -2256,3 +2296,4 @@ module_exit(rga2_exit);
 MODULE_AUTHOR("zsq@rock-chips.com");
 MODULE_DESCRIPTION("Driver for rga device");
 MODULE_LICENSE("GPL");
+MODULE_IMPORT_NS(DMA_BUF);

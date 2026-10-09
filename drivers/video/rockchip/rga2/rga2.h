@@ -21,6 +21,27 @@
 #define RGA2_GET_VERSION 0x601b
 
 
+/*
+ * airockchip librga 1.x 'r'-family ioctls (handle-based buffer management).
+ * The modern userspace librga (e.g. 1.10.4 bundled with Jellyfin-FFmpeg)
+ * issues these instead of the legacy 0x50xx/0x60xx blit commands for buffer
+ * import/release/version.  Values are the exact _IOC encodings taken from the
+ * library binary.  Our BSP rga2 only spoke the legacy set, so these were all
+ * rejected as "unknown ioctl cmd".  We now handle them: import validates a
+ * dma-buf fd and returns that fd as the handle (so the legacy blit path, which
+ * does dma_buf_get(addr), keeps working); release is a no-op; version returns a
+ * sane string so librga falls into compatibility mode.
+ */
+#define RGA2_IOC_GET_DRV_VERSION  0x801c7201u
+#define RGA2_IOC_GET_HW_VERSION   0x80907202u
+#define RGA2_IOC_IMPORT_BUF3      0x40107203u
+#define RGA2_IOC_IMPORT_BUFFER    0x40107204u
+#define RGA2_IOC_RELEASE_BUFFER   0x80047205u
+#define RGA2_IOC_IMPORT_BUF6      0xc0987206u
+#define RGA2_IOC_IMPORT_BUF7      0xc0987207u
+#define RGA2_IOC_OP8              0xc0047208u
+
+
 #define RGA2_REG_CTRL_LEN    0x8    /* 8  */
 #define RGA2_REG_CMD_LEN     0x20   /* 32 */
 #define RGA2_CMD_BUF_SIZE    0x700  /* 16*28*4 */
