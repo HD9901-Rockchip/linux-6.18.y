@@ -29,6 +29,8 @@
 
 #include "iommu-pages.h"
 
+#include <soc/rockchip/rockchip_iommu.h>
+
 /** MMU register offsets */
 #define RK_MMU_DTE_ADDR		0x00	/* Directory table address */
 #define RK_MMU_STATUS		0x04
@@ -116,7 +118,9 @@ struct rk_iommu {
 	struct list_head node; /* entry in rk_iommu_domain.iommus */
 	struct iommu_domain *domain; /* domain to which iommu is attached */
 	const struct rk_iommu_ops *rk_ops;
+	bool iommu_enabled; /* paging enabled, used by the Rockchip MPP drivers */
 };
+
 
 struct rk_iommudata {
 	struct device_link *link; /* runtime PM link from IOMMU to master */
@@ -933,6 +937,8 @@ static void rk_iommu_disable(struct rk_iommu *iommu)
 	}
 	rk_iommu_disable_stall(iommu);
 	clk_bulk_disable(iommu->num_clocks, iommu->clocks);
+
+	iommu->iommu_enabled = false;
 }
 
 /* Must be called with iommu powered on and attached */
@@ -973,8 +979,118 @@ out_disable_stall:
 	rk_iommu_disable_stall(iommu);
 out_disable_clocks:
 	clk_bulk_disable(iommu->num_clocks, iommu->clocks);
+
+	if (!ret)
+		iommu->iommu_enabled = true;
+
 	return ret;
 }
+
+/*
+ * Rockchip BSP MPP support.
+ *
+ * The MPP (media process platform) VPU drivers ported from the Rockchip BSP
+ * kernel need a few IOMMU control helpers that are not part of the upstream
+ * IOMMU API:
+ *
+ *   - enable/disable: re-initialize the MMU around a hardware reset without
+ *     detaching the domain (used by the RKVDEC/VPU reset workarounds).
+ *   - is_enabled: query the paging state.
+ *   - mask_irq/unmask_irq: stop the page fault interrupt storm while the
+ *     page fault handler works, and resume paging afterwards.
+ *
+ * All of them are only meaningful once a paging domain has been attached to
+ * the master device (i.e. the device is no longer on the identity domain).
+ */
+#define rk_iommu_is_paging(iommu)					\
+	((iommu) && (iommu)->domain &&					\
+	 (iommu)->domain->type != IOMMU_DOMAIN_IDENTITY)
+
+int rockchip_iommu_disable(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+
+	if (!rk_iommu_is_paging(iommu))
+		return -ENODEV;
+
+	rk_iommu_disable(iommu);
+
+	return 0;
+}
+EXPORT_SYMBOL(rockchip_iommu_disable);
+
+int rockchip_iommu_enable(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+
+	if (!rk_iommu_is_paging(iommu))
+		return -ENODEV;
+
+	return rk_iommu_enable(iommu);
+}
+EXPORT_SYMBOL(rockchip_iommu_enable);
+
+bool rockchip_iommu_is_enabled(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+
+	if (!rk_iommu_is_paging(iommu))
+		return false;
+
+	return iommu->iommu_enabled;
+}
+EXPORT_SYMBOL(rockchip_iommu_is_enabled);
+
+int rockchip_iommu_force_reset(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int ret;
+
+	if (!iommu)
+		return -ENODEV;
+
+	ret = rk_iommu_enable_stall(iommu);
+	if (ret)
+		return ret;
+
+	ret = rk_iommu_force_reset(iommu);
+
+	rk_iommu_disable_stall(iommu);
+
+	return ret;
+}
+EXPORT_SYMBOL(rockchip_iommu_force_reset);
+
+void rockchip_iommu_mask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int i;
+
+	if (!rk_iommu_is_paging(iommu))
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++)
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, 0);
+}
+EXPORT_SYMBOL(rockchip_iommu_mask_irq);
+
+void rockchip_iommu_unmask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int i;
+
+	if (!rk_iommu_is_paging(iommu))
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++) {
+		/* Need to zap tlb in case of mapping during pagefault */
+		rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_ZAP_CACHE);
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, RK_MMU_IRQ_MASK);
+		/* Leave iommu in pagefault state until mapping finished */
+		rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_PAGE_FAULT_DONE);
+	}
+}
+EXPORT_SYMBOL(rockchip_iommu_unmask_irq);
 
 static int rk_iommu_identity_attach(struct iommu_domain *identity_domain,
 				    struct device *dev)
