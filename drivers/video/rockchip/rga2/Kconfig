@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-2.0
+menuconfig ROCKCHIP_RGA2
+	tristate "RGA2 (Rockchip 2D graphics accelerator)"
+	depends on ARCH_ROCKCHIP
+	help
+	  Rockchip RGA2 2D graphics accelerator driver (BSP / librga ABI).
+	  This is the Rockchip BSP driver exposing /dev/rga with the ioctl
+	  interface expected by librga, as an alternative to the V4L2 based
+	  upstream driver in drivers/media/platform/rockchip/rga.
+
+	  Say Y here to build the BSP RGA2 driver. If unsure, say N.
+
+if ROCKCHIP_RGA2
+
+config ROCKCHIP_RGA2_PROC_FS
+	bool "Enable RGA2 procfs"
+	select ROCKCHIP_RGA2_DEBUGGER
+	depends on PROC_FS
+	help
+	  Enable procfs to debug RGA driver.
+
+config ROCKCHIP_RGA2_DEBUG_FS
+	bool "Enable RGA2 debugfs"
+	select ROCKCHIP_RGA2_DEBUGGER
+	depends on DEBUG_FS
+	default y
+	help
+	  Enable debugfs to debug RGA driver.
+
+config ROCKCHIP_RGA2_DEBUGGER
+	bool
+	help
+	  Enabling the debugger of RGA2, you can use procfs and debugfs for debugging.
+
+endif
