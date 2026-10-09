@@ -445,3 +445,4 @@ void pagetable_free_kernel(struct ptdesc *pt)
 	schedule_work(&kernel_pgtable_work.work);
 }
 #endif
+EXPORT_SYMBOL(__pte_offset_map_lock);
