@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Rockchip video/media hardware drivers ported from the Rockchip BSP kernel
+#
+
+source "drivers/video/rockchip/mpp/Kconfig"
+source "drivers/video/rockchip/rga2/Kconfig"
+source "drivers/video/rockchip/rga3/Kconfig"

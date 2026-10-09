@@ -7,6 +7,8 @@ obj-$(CONFIG_VGASTATE)            += vgastate.o
 obj-$(CONFIG_VIDEO)               += cmdline.o nomodeset.o
 obj-$(CONFIG_HDMI)                += hdmi.o
 
+obj-y                             += rockchip/
+
 screen_info-y			  := screen_info_generic.o
 screen_info-$(CONFIG_PCI)         += screen_info_pci.o
 
