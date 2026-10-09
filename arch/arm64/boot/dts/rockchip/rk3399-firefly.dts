@@ -9,6 +9,12 @@
 #include <dt-bindings/pwm/pwm.h>
 #include <dt-bindings/usb/pd.h>
 #include "rk3399.dtsi"
+/*
+ * Rockchip BSP media stack: /dev/mpp_service with rkvdec (H.264/H.265/VP9),
+ * vdpu2, vepu2 and the BSP RGA2 driver. Replaces the upstream Hantro VPU,
+ * stateless rkvdec and V4L2 RGA drivers for this board.
+ */
+#include "rk3399-mpp.dtsi"
 
 / {
 	model = "Firefly-RK3399 Board";

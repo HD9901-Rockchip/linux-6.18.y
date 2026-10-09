@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Rockchip MPP (Media Process Platform) enablement for RK3399.
+ *
+ * The Rockchip BSP video codec stack ported to this kernel lives in
+ * drivers/video/rockchip/mpp/ and exposes /dev/mpp_service plus the
+ * rkvdec / vdpu2 / vepu2 sub devices. It drives the very same register
+ * windows as the upstream drivers:
+ *
+ *   0xff650000  rockchip,rk3399-vpu   (Hantro VPU, upstream)
+ *                 -> vepu@ff650000 + vdpu@ff650400  (MPP)
+ *   0xff660000  rockchip,rk3399-vdec  (stateless rkvdec, upstream)
+ *                 -> rkvdec@ff660000                 (MPP)
+ *
+ * Upstream and BSP cannot be bound at the same time (the register windows
+ * overlap and devm_request_mem_region() rejects the second claimant), so the
+ * upstream nodes are explicitly disabled here and the MPP nodes take over.
+ * The BSP MPEG stack is required for H.264/H.265/VP9 playback through
+ * librockchip_mpp / ffmpeg-rockchip.
+ *
+ * Include this file *after* rk3399.dtsi (i.e. after rk3399-base.dtsi).
+ */
+
+/ {
+	mpp_srv: mpp-srv {
+		compatible = "rockchip,mpp-service";
+		rockchip,taskqueue-count = <2>;
+		rockchip,resetgroup-count = <2>;
+		status = "okay";
+	};
+
+	vepu: vepu@ff650000 {
+		compatible = "rockchip,vpu-encoder-v2";
+		reg = <0x0 0xff650000 0x0 0x400>;
+		interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "irq_enc";
+		clocks = <&cru ACLK_VCODEC>, <&cru HCLK_VCODEC>;
+		clock-names = "aclk_vcodec", "hclk_vcodec";
+		resets = <&cru SRST_H_VCODEC>, <&cru SRST_A_VCODEC>;
+		reset-names = "shared_video_h", "shared_video_a";
+		iommus = <&vpu_mmu>;
+		rockchip,srv = <&mpp_srv>;
+		rockchip,taskqueue-node = <0>;
+		rockchip,resetgroup-node = <0>;
+		power-domains = <&power RK3399_PD_VCODEC>;
+		status = "okay";
+	};
+
+	vdpu: vdpu@ff650400 {
+		compatible = "rockchip,vpu-decoder-v2";
+		reg = <0x0 0xff650400 0x0 0x400>;
+		interrupts = <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "irq_dec";
+		clocks = <&cru ACLK_VCODEC>, <&cru HCLK_VCODEC>;
+		clock-names = "aclk_vcodec", "hclk_vcodec";
+		resets = <&cru SRST_H_VCODEC>, <&cru SRST_A_VCODEC>;
+		reset-names = "shared_video_h", "shared_video_a";
+		iommus = <&vpu_mmu>;
+		power-domains = <&power RK3399_PD_VCODEC>;
+		rockchip,srv = <&mpp_srv>;
+		rockchip,taskqueue-node = <0>;
+		rockchip,resetgroup-node = <0>;
+		status = "okay";
+	};
+
+	rkvdec: rkvdec@ff660000 {
+		compatible = "rockchip,rkv-decoder-rk3399";
+		reg = <0x0 0xff660000 0x0 0x400>;
+		interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "irq_dec";
+		clocks = <&cru ACLK_VDU>, <&cru HCLK_VDU>,
+			 <&cru SCLK_VDU_CA>, <&cru SCLK_VDU_CORE>;
+		clock-names = "aclk_vcodec", "hclk_vcodec",
+			      "clk_cabac", "clk_core";
+		resets = <&cru SRST_H_VDU>, <&cru SRST_A_VDU>,
+			 <&cru SRST_H_VDU_NOC>, <&cru SRST_A_VDU_NOC>,
+			 <&cru SRST_VDU_CA>, <&cru SRST_VDU_CORE>;
+		reset-names = "video_h", "video_a", "niu_h", "niu_a",
+			      "video_cabac", "video_core";
+		iommus = <&vdec_mmu>;
+		rockchip,srv = <&mpp_srv>;
+		rockchip,taskqueue-node = <1>;
+		rockchip,resetgroup-node = <1>;
+		power-domains = <&power RK3399_PD_VDU>;
+		status = "okay";
+	};
+};
+
+/*
+ * The MPP stack now owns 0xff650000 (VCODEC) and 0xff660000 (VDU); keep the
+ * upstream Hantro VPU and stateless rkvdec drivers away from them.
+ */
+&vpu {
+	status = "disabled";
+};
+
+&vdec {
+	status = "disabled";
+};
+
+&vpu_mmu {
+	status = "okay";
+};
+
+&vdec_mmu {
+	status = "okay";
+};
+
+/*
+ * RGA2: switch the 2D engine over to the Rockchip BSP driver
+ * (drivers/video/rockchip/rga2 -> /dev/rga, librga ioctl ABI).
+ *
+ * The base rk3399 dtsi advertises the upstream compatible first so that
+ * drivers/media/platform/rockchip/rga wins by default. Replace the whole
+ * compatible list here to bind the BSP driver instead. Comment this block
+ * out to go back to the upstream V4L2 RGA driver.
+ */
+/*
+ * RGA2: switch the 2D engine over to the Rockchip BSP driver
+ * (drivers/video/rockchip/rga2 -> /dev/rga, librga ioctl ABI).
+ *
+ * The upstream rk3399 (base) rga node advertises clock-names
+ * "aclk"/"hclk"/"sclk", but the BSP rga2 driver probes with
+ * devm_clk_get(dev, "clk_rga"|"aclk_rga"|"hclk_rga") (see
+ * rga2_drv.c). Those names are NOT present in the base node, so
+ * devm_clk_get() returns -ENOENT and the probe oopses in
+ * clk_prepare() (x0 = 0xfffffffffffffffe). Re-issue the clocks
+ * with the BSP clock-names here, exactly as the BSP 5.10
+ * rk3399-linux.dtsi rga node does, so the driver can resolve
+ * them. "dev_mode" is also read by the driver (of_property_read_u32
+ * at rga2_drv.c:1824). Comment this block out to go back to the
+ * upstream V4L2 RGA driver.
+ */
+&rga {
+	compatible = "rockchip,rga2";
+	dev_mode = <1>;
+	clocks = <&cru ACLK_RGA>, <&cru HCLK_RGA>, <&cru SCLK_RGA_CORE>;
+	clock-names = "aclk_rga", "hclk_rga", "clk_rga";
+	power-domains = <&power RK3399_PD_RGA>;
+	status = "okay";
+};
