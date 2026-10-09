@@ -624,6 +624,26 @@ static int rga_mm_map_dma_buffer(struct rga_external_buffer *external_buffer,
 		goto free_buffer;
 	}
 
+	/*
+	 * RK3399 rkmpp -> RGA inter-frame corruption fix.
+	 *
+	 * mpp/VPU writes each decoded frame into a buffer drawn from a
+	 * recycled dma_buf pool. The RGA reads these buffers but, unlike the
+	 * RGA_VIRTUAL_ADDRESS path (which sets RGA_MEM_FORCE_FLUSH_CACHE),
+	 * never re-synchronizes the CPU cache. On buffer reuse the RGA can
+	 * therefore read stale cache lines that still hold a previous
+	 * frame's data, producing deterministic inter-frame artifacts
+	 * (花屏 / visual corruption) while I-frames stay clean.
+	 *
+	 * Force a cache invalidation of the external buffer so the RGA
+	 * reads fresh memory. This is a cheap no-op for non-cacheable
+	 * (device-only) buffers and only ever discards stale CPU cache
+	 * lines, so it is safe for both source and destination buffers.
+	 */
+	if (buffer->sgt)
+		dma_sync_sg_for_device(map_dev, buffer->sgt->sgl,
+				       buffer->sgt->orig_nents, DMA_FROM_DEVICE);
+
 	if (buffer->size < ex_buffer_size) {
 		rga_err("Only get buffer %ld byte from %s = 0x%lx, but current image required %d byte\n",
 			buffer->size, rga_get_memory_type_str(external_buffer->type),

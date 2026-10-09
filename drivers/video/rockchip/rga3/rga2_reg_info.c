@@ -788,8 +788,12 @@ static void RGA2_set_reg_src_info(u8 *base, struct rga2_req *msg)
 		    msg->src.format == RGA_FORMAT_YCbCr_422_SP_10B ||
 		    msg->src.format == RGA_FORMAT_YCrCb_422_SP_10B)
 			/*
-			 * Legacy: implicit semantics exist here, 10bit format
-			 * width_stride equals byte_stride.
+			 * RK3399 RGA2 10-bit: source is Rockchip compact
+			 * 10-bit (NV15). vir_w is already the *byte* stride
+			 * of the source buffer (verified: uv0 = act_h * vir_w
+			 * = exact Y-plane size). Use it directly as the byte
+			 * stride. The earlier (vir_w*10)/8 experiment broke
+			 * chroma (PSNR collapsed) and is reverted.
 			 */
 			byte_stride = msg->src.vir_w;
 		else
@@ -1026,6 +1030,18 @@ static void RGA2_set_reg_src_info(u8 *base, struct rga2_req *msg)
 
 		*bRGA_SRC_VIR_INFO = (stride >> 2) | ((mask_stride >> 2) << 16);
 		*bRGA_SRC_ACT_INFO = (msg->src.act_w - 1) | ((msg->src.act_h - 1) << 16);
+
+		if (yuv10) {
+			static int __rga10_dbg_cnt;
+			if (__rga10_dbg_cnt < 4) {
+				__rga10_dbg_cnt++;
+				pr_info("RGA2-10BIT src fmt=%u vir_w=%u act_w=%u vir_h=%u act_h=%u stride=%u srcinfo=0x%08x y0=0x%lx uv0=0x%lx\n",
+					msg->src.format, msg->src.vir_w, msg->src.act_w,
+					msg->src.vir_h, msg->src.act_h, stride, reg,
+					(unsigned long)msg->src.yrgb_addr,
+					(unsigned long)msg->src.uv_addr);
+			}
+		}
 
 		break;
 	case RGA_TILE4x4_MODE:
