@@ -2296,4 +2296,3 @@ module_exit(rga2_exit);
 MODULE_AUTHOR("zsq@rock-chips.com");
 MODULE_DESCRIPTION("Driver for rga device");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS(DMA_BUF);
