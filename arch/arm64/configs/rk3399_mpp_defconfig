@@ -407,6 +407,9 @@ CONFIG_SNI_AVE=y
 CONFIG_SNI_NETSEC=y
 CONFIG_STMMAC_ETH=y
 CONFIG_DWMAC_TEGRA=m
+# CONFIG_DWMAC_SOCFPGA is not set
+# ophub 6.18 dwmac-socfpga.c is broken: duplicate socfpga_agilex5_setup_plat_dat
+# + undeclared smtg_crosststamp; RK3399 uses DWMAC_ROCKCHIP
 CONFIG_TI_K3_AM65_CPSW_NUSS=y
 CONFIG_TI_ICSSG_PRUETH=m
 CONFIG_QCOM_IPA=m
